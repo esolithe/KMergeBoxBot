@@ -68,12 +68,12 @@ class KMergeBoxBot(discord.Client):
         asyncio.ensure_future(self.runFirstItemInQueue())
 
     async def runFirstItemInQueue(self):
-        await asyncio.sleep(30)
         # Get first task in the ordered dictionary
         firstTask = next(iter(self.currentTasks.items()))
         attachment = firstTask[1]
         # Get the name without the extension
         nameWithoutExt = attachment.filename.replace('.yaml', '')
+        print(f'Starting merge: {nameWithoutExt}')
         # Run the merge job
         # TODO Replace with an option which does not use shell=True
         result = subprocess.run(f'./run.sh {nameWithoutExt}', capture_output=True, text=True, shell=True)
@@ -92,6 +92,7 @@ class KMergeBoxBot(discord.Client):
         # Clear from the pending task queue
         del self.currentTasks[firstTask[0]]
         self.currentlyMerging = False
+        print(f'Ending merge: {nameWithoutExt}')
 
     # Waits for the user to be logged on before starting the run merges task
     @runMerges.before_loop
