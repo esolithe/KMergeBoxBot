@@ -1,3 +1,5 @@
+import asyncio
+
 import discord, subprocess
 import os
 from discord.ext import tasks
@@ -14,6 +16,8 @@ apiKey=os.getenv('apiKey')
 class KMergeBoxBot(discord.Client):
     # List of current / ongoing tasks
     currentTasks = {}
+    # Is a merge running
+    currentlyMerging = False
 
     # Start the merge watcher / runner in the background
     async def setup_hook(self) -> None:
@@ -58,6 +62,13 @@ class KMergeBoxBot(discord.Client):
         # If no jobs in queue, skip
         if len(self.currentTasks.keys()) == 0:
             return
+        if self.currentlyMerging == True:
+            return
+        self.currentlyMerging = True
+        asyncio.ensure_future(self.runFirstItemInQueue())
+
+    async def runFirstItemInQueue(self):
+        await asyncio.sleep(30)
         # Get first task in the ordered dictionary
         firstTask = next(iter(self.currentTasks.items()))
         attachment = firstTask[1]
@@ -65,24 +76,22 @@ class KMergeBoxBot(discord.Client):
         nameWithoutExt = attachment.filename.replace('.yaml', '')
         # Run the merge job
         # TODO Replace with an option which does not use shell=True
-        result = subprocess.run(f'./run.sh {nameWithoutExt}', capture_output=True, text=True, shell=True) # subprocess.run([f'./run.sh {nameWithoutExt}'], capture_output=True, text=True, shell=True)
+        result = subprocess.run(f'./run.sh {nameWithoutExt}', capture_output=True, text=True, shell=True)
         # Put the standard out and error into a single string
         resultText = f'STDOUT: {result.stdout}, STDERR: {result.stderr}'
-        # Pring to logs
+        # Print to logs
         print(resultText)
-        # Clear from the pending task queue
-        del self.currentTasks[firstTask[0]]
         # Get the channel to respond to
         channel = self.get_channel(channelToListenOn)
         # If there are no errors, confirm it has finished, otherwise respond with the errors as an attachment
-        if (len(result.stderr) == 0):
-            await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has been merged successfully')
-        else:
-            locToSaveTo = path.join(basePath, 'log.txt')
-            with open(locToSaveTo, 'w') as filetowrite:
-                filetowrite.write(resultText)
-            file = discord.File(locToSaveTo)
-            await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has failed to merge', file=file)
+        locToSaveTo = path.join(basePath, 'log.txt')
+        with open(locToSaveTo, 'w') as fileToWrite:
+            fileToWrite.write(resultText)
+        file = discord.File(locToSaveTo)
+        await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
+        # Clear from the pending task queue
+        del self.currentTasks[firstTask[0]]
+        self.currentlyMerging = False
 
     # Waits for the user to be logged on before starting the run merges task
     @runMerges.before_loop
