@@ -1,9 +1,9 @@
 import asyncio
+from os import path
 
-import discord, subprocess
+import discord
 import os
 from discord.ext import tasks
-from os import path
 from dotenv import load_dotenv
 
 # Read config from .env file
@@ -11,6 +11,9 @@ load_dotenv()
 basePath=os.getenv('basePath')
 channelToListenOn=int(os.getenv('channelToListenOn'))
 apiKey=os.getenv('apiKey')
+
+# Sets base path (current directory)
+os.chdir(basePath)
 
 # Main bot class
 class KMergeBoxBot(discord.Client):
@@ -74,19 +77,22 @@ class KMergeBoxBot(discord.Client):
         # Get the name without the extension
         nameWithoutExt = attachment.filename.replace('.yaml', '')
         print(f'Starting merge: {nameWithoutExt}')
-        # Run the merge job
-        # TODO Replace with an option which does not use shell=True
-        result = subprocess.run(f'./run.sh {nameWithoutExt}', capture_output=True, text=True, shell=True)
+        # Declare the merge job command
+        commandToRun = f'sh ./run.sh {nameWithoutExt}'
+        # Start up the merge process, piping outputs ready to be collected once complete
+        process = await asyncio.create_subprocess_shell(commandToRun, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        # Wait for the merge to complete (no logs will be printed yet)
+        stdout, stderr = await process.communicate()
         # Put the standard out and error into a single string
-        resultText = f'STDOUT: {result.stdout}, STDERR: {result.stderr}'
-        # Print to logs
+        resultText = f'STDOUT: {stdout.decode()}, STDERR: {stderr.decode()}'
+        # Print to logs (console and file)
         print(resultText)
-        # Get the channel to respond to
-        channel = self.get_channel(channelToListenOn)
-        # If there are no errors, confirm it has finished, otherwise respond with the errors as an attachment
         locToSaveTo = path.join(basePath, 'log.txt')
         with open(locToSaveTo, 'w') as fileToWrite:
             fileToWrite.write(resultText)
+        # Get the channel to respond to
+        channel = self.get_channel(channelToListenOn)
+        # Respond with the logs as an attachment
         file = discord.File(locToSaveTo)
         await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
         # Clear from the pending task queue
