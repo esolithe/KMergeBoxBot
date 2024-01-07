@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 from os import path
 
 import discord
@@ -13,6 +14,7 @@ channelToListenOn=int(os.getenv('channelToListenOn'))
 megaMergeRole=int(os.getenv('megaMergeRole'))
 megaMergeError=os.getenv('megaMergeError')
 forbiddenWords=os.getenv('forbiddenWords').split(",")
+cleanupThreshold=float(os.getenv('cleanupThreshold'))
 apiKey=os.getenv('apiKey')
 
 # Sets base path (current directory)
@@ -22,6 +24,8 @@ os.chdir(basePath)
 class KMergeBoxBot(discord.Client):
     # List of current / ongoing tasks
     currentTasks = {}
+    # Is cleanup happening
+    currentlyCleaning = False
     # Is a merge running
     currentlyMerging = False
 
@@ -82,6 +86,14 @@ class KMergeBoxBot(discord.Client):
 
     @tasks.loop(seconds=10)
     async def runMerges(self):
+        # Check disk space free
+        if self.currentlyCleaning == True:
+            return
+        total, used, free = shutil.disk_usage(__file__)
+        if (used / total > cleanupThreshold):
+            print("Running cleanup")
+            asyncio.ensure_future(self.cleanupSpace())
+
         # If no jobs in queue, skip
         if len(self.currentTasks.keys()) == 0:
             return
@@ -89,6 +101,22 @@ class KMergeBoxBot(discord.Client):
             return
         self.currentlyMerging = True
         asyncio.ensure_future(self.runFirstItemInQueue())
+
+    async def cleanupSpace(self):
+        self.currentlyCleaning = True
+        # Declare the merge job command
+        commandToRun = f'sh ./cleanup.sh'
+        # Start up the merge process, piping outputs ready to be collected once complete
+        process = await asyncio.create_subprocess_shell(commandToRun, stdout=asyncio.subprocess.PIPE,
+                                                        stderr=asyncio.subprocess.PIPE)
+        # Wait for the merge to complete (no logs will be printed yet)
+        stdout, stderr = await process.communicate()
+        # Put the standard out and error into a single string
+        resultText = f'STDOUT: {stdout.decode()}, STDERR: {stderr.decode()}'
+        # Print to logs (console and file)
+        print(resultText)
+        await asyncio.sleep(30)
+        self.currentlyCleaning = False
 
     async def runFirstItemInQueue(self):
         # Get first task in the ordered dictionary
