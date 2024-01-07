@@ -12,6 +12,7 @@ basePath=os.getenv('basePath')
 channelToListenOn=int(os.getenv('channelToListenOn'))
 megaMergeRole=int(os.getenv('megaMergeRole'))
 megaMergeError=os.getenv('megaMergeError')
+forbiddenWords=os.getenv('forbiddenWords').split(",")
 apiKey=os.getenv('apiKey')
 
 # Sets base path (current directory)
@@ -59,6 +60,10 @@ class KMergeBoxBot(discord.Client):
         data = (await attachment.read()).decode("utf-8")
         if "---" in data and not any(role.id == megaMergeRole for role in message.author.roles):
             await message.channel.send(megaMergeError)
+            return
+        # If the file contains forbidden words, then don't do the merge
+        if any(word in data.lower() for word in forbiddenWords):
+            await message.channel.send(f'The file {attachment.filename} contains forbidden words.')
             return
 
         # Save the attachment
