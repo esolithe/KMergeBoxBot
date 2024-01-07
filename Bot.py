@@ -40,16 +40,22 @@ class KMergeBoxBot(discord.Client):
         # If message sent from the bot, ignore
         if message.author.id == self.user.id:
             return
-        # If message do not have exactly one attachment, ignore
-        if len(message.attachments) != 1:
-            return
-        attachment = message.attachments[0]
-        # If the attachment is not a yaml, ignore
-        if not attachment.filename.endswith(".yaml"):
-            return
         # If requester has already submitted a task, respond with an error
         if message.author.id in self.currentTasks.keys():
             await message.channel.send(f'{message.author.mention} has already submitted a pending task (please try and submit it again later): {self.currentTasks[message.author.id].filename}')
+            return
+        # If message do not have exactly one attachment, ignore
+        splitCommand = message.content.lower().split(" ")
+        if len(splitCommand) == 2 and splitCommand[0] == "!regen":
+            self.currentTasks[message.author.id] = splitCommand[1]
+            print(f'Rerunning {splitCommand[1]} submitted from {message.author}')
+            await message.channel.send(f'Rerunning {splitCommand[1]} submitted from {message.author}')
+        elif len(message.attachments) != 1:
+            return
+
+        attachment = message.attachments[0]
+        # If the attachment is not a yaml, ignore
+        if not attachment.filename.endswith(".yaml"):
             return
         locToSaveTo = path.join(basePath,attachment.filename)
         # If the named merge already has been run, respond with an error
@@ -70,7 +76,7 @@ class KMergeBoxBot(discord.Client):
         await attachment.save(locToSaveTo)
 
         # Add merge job to queue and then respond to requester
-        self.currentTasks[message.author.id] = attachment
+        self.currentTasks[message.author.id] = attachment.filename
         print(f'Attachment submitted from {message.author}: {message.content} and saved to {locToSaveTo}')
         await message.channel.send(f'Task submitted for {message.author.mention}: {attachment.filename}')
 
@@ -89,7 +95,7 @@ class KMergeBoxBot(discord.Client):
         firstTask = next(iter(self.currentTasks.items()))
         attachment = firstTask[1]
         # Get the name without the extension
-        nameWithoutExt = attachment.filename.replace('.yaml', '')
+        nameWithoutExt = attachment.replace('.yaml', '')
         print(f'Starting merge: {nameWithoutExt}')
         # Declare the merge job command
         commandToRun = f'sh ./run.sh {nameWithoutExt}'
