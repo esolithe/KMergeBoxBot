@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 basePath=os.getenv('basePath')
 channelToListenOn=int(os.getenv('channelToListenOn'))
-megaMergeRole=int(os.getenv('megaMergeRole'))
-megaMergeError=os.getenv('megaMergeError')
+forbiddenWordsRole=int(os.getenv('forbiddenWordsRole'))
+forbiddenWordsError=os.getenv('forbiddenWordsError')
 forbiddenWords=os.getenv('forbiddenWords').split(",")
 cleanupThreshold=float(os.getenv('cleanupThreshold'))
 apiKey=os.getenv('apiKey')
@@ -66,14 +66,10 @@ class KMergeBoxBot(discord.Client):
         if path.exists(locToSaveTo):
             await message.channel.send(f'The file {attachment.filename} already has been merged before. Please choose a different name {message.author.mention}.')
             return
-        # Checks if it is a mega merge and if so the user has the designated role
+        # If the file contains forbidden words, then don't do the merge unless the user has the designated role
         data = (await attachment.read()).decode("utf-8")
-        if "---" in data and not any(role.id == megaMergeRole for role in message.author.roles):
-            await message.channel.send(megaMergeError)
-            return
-        # If the file contains forbidden words, then don't do the merge
-        if any(word in data.lower() for word in forbiddenWords):
-            await message.channel.send(f'The file {attachment.filename} contains forbidden words.')
+        if any(word in data.lower() for word in forbiddenWords) and not any(role.id == forbiddenWordsRole for role in message.author.roles):
+            await message.channel.send(forbiddenWordsError)
             return
 
         # Save the attachment
