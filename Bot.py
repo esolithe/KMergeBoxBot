@@ -13,7 +13,7 @@ basePath=os.getenv('basePath')
 channelToListenOn=int(os.getenv('channelToListenOn'))
 gatedWordsRole=int(os.getenv('gatedWordsRole'))
 gatedWordsError=os.getenv('gatedWordsError')
-gatedWords=os.getenv('forbiddenWords').split(",")
+gatedWords=os.getenv('gatedWords').split(",")
 forbiddenWords=os.getenv('forbiddenWords').split(",")
 cleanupThreshold=float(os.getenv('cleanupThreshold'))
 apiKey=os.getenv('apiKey')
@@ -25,6 +25,8 @@ os.chdir(basePath)
 class KMergeBoxBot(discord.Client):
     # List of current / ongoing tasks
     currentTasks = {}
+    # List of current low priority / ongoing tasks
+    currentLowPriorityTasks = {}
     # Is cleanup happening
     currentlyCleaning = False
     # Is a merge running
@@ -46,16 +48,20 @@ class KMergeBoxBot(discord.Client):
         if message.author.id == self.user.id:
             return
         # If requester has already submitted a task, respond with an error
-        if message.author.id in self.currentTasks.keys():
+        if message.author.id in self.currentTasks.keys() or message.author.id in self.currentLowPriorityTasks.keys():
             await message.channel.send(f'{message.author.mention} has already submitted a pending task (please try and submit it again later): {self.currentTasks[message.author.id].filename}')
             return
-        # If message do not have exactly one attachment, ignore
+
+        # If message is a command, then run a regen
         splitCommand = message.content.lower().split(" ")
         if len(splitCommand) == 2 and splitCommand[0] == "!regen":
             self.currentTasks[message.author.id] = splitCommand[1]
             print(f'Rerunning {splitCommand[1]} submitted from {message.author}')
             await message.channel.send(f'Rerunning {splitCommand[1]} submitted from {message.author}')
-        elif len(message.attachments) != 1:
+            return
+
+        # If message do not have exactly one attachment, ignore
+        if len(message.attachments) != 1:
             return
 
         attachment = message.attachments[0]
@@ -67,9 +73,10 @@ class KMergeBoxBot(discord.Client):
         if path.exists(locToSaveTo):
             await message.channel.send(f'The file {attachment.filename} already has been merged before. Please choose a different name {message.author.mention}.')
             return
-        # If the file contains gated words, then don't do the merge unless the user has the designated role
+        # If the file contains gated words, then don't do the merge unless the user has the designated role and even then run at lower priority
         data = (await attachment.read()).decode("utf-8")
-        if any(word in data.lower() for word in gatedWords) and not any(role.id == gatedWordsRole for role in message.author.roles):
+        isGated = any(word in data.lower() for word in gatedWords)
+        if isGated and not any(role.id == gatedWordsRole for role in message.author.roles):
             await message.channel.send(gatedWordsError)
             return
         # If the file contains banned words, don't run it
@@ -81,7 +88,11 @@ class KMergeBoxBot(discord.Client):
         await attachment.save(locToSaveTo)
 
         # Add merge job to queue and then respond to requester
-        self.currentTasks[message.author.id] = attachment.filename
+        if isGated:
+            self.currentLowPriorityTasks[message.author.id] = attachment.filename
+        else:
+            self.currentTasks[message.author.id] = attachment.filename
+
         print(f'Attachment submitted from {message.author}: {message.content} and saved to {locToSaveTo}')
         await message.channel.send(f'Task submitted for {message.author.mention}: {attachment.filename}')
 
@@ -96,7 +107,7 @@ class KMergeBoxBot(discord.Client):
             asyncio.ensure_future(self.cleanupSpace())
 
         # If no jobs in queue, skip
-        if len(self.currentTasks.keys()) == 0:
+        if len(self.currentTasks.keys()) == 0 and len(self.currentLowPriorityTasks.keys()) == 0:
             return
         if self.currentlyMerging == True:
             return
@@ -121,7 +132,10 @@ class KMergeBoxBot(discord.Client):
 
     async def runFirstItemInQueue(self):
         # Get first task in the ordered dictionary
-        firstTask = next(iter(self.currentTasks.items()))
+        firstTask = next(iter(self.currentTasks.items()), next(iter(self.currentLowPriorityTasks.items()), ""))
+        if firstTask == "":
+            self.currentlyMerging = False
+            return
         attachment = firstTask[1]
         # Get the name without the extension
         nameWithoutExt = attachment.replace('.yaml', '')
@@ -146,6 +160,7 @@ class KMergeBoxBot(discord.Client):
         await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
         # Clear from the pending task queue
         del self.currentTasks[firstTask[0]]
+        del self.currentLowPriorityTasks[firstTask[0]]
         self.currentlyMerging = False
         print(f'Ending merge: {nameWithoutExt}')
 
