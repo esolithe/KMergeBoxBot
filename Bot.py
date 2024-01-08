@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 load_dotenv()
 basePath=os.getenv('basePath')
 channelToListenOn=int(os.getenv('channelToListenOn'))
-forbiddenWordsRole=int(os.getenv('forbiddenWordsRole'))
-forbiddenWordsError=os.getenv('forbiddenWordsError')
+gatedWordsRole=int(os.getenv('gatedWordsRole'))
+gatedWordsError=os.getenv('gatedWordsError')
+gatedWords=os.getenv('forbiddenWords').split(",")
 forbiddenWords=os.getenv('forbiddenWords').split(",")
 cleanupThreshold=float(os.getenv('cleanupThreshold'))
 apiKey=os.getenv('apiKey')
@@ -66,10 +67,14 @@ class KMergeBoxBot(discord.Client):
         if path.exists(locToSaveTo):
             await message.channel.send(f'The file {attachment.filename} already has been merged before. Please choose a different name {message.author.mention}.')
             return
-        # If the file contains forbidden words, then don't do the merge unless the user has the designated role
+        # If the file contains gated words, then don't do the merge unless the user has the designated role
         data = (await attachment.read()).decode("utf-8")
-        if any(word in data.lower() for word in forbiddenWords) and not any(role.id == forbiddenWordsRole for role in message.author.roles):
-            await message.channel.send(forbiddenWordsError)
+        if any(word in data.lower() for word in gatedWords) and not any(role.id == gatedWordsRole for role in message.author.roles):
+            await message.channel.send(gatedWordsError)
+            return
+        # If the file contains banned words, don't run it
+        if any(word in data.lower() for word in forbiddenWords):
+            await message.channel.send(f'The file {attachment.filename} contains forbidden words and cannot be run.')
             return
 
         # Save the attachment
