@@ -7,6 +7,10 @@ A basic Python bot for automating the merge box on the Kobold server
 ```env
 basePath=""
 channelToListenOn=000000000000000
+forbiddenWordsRole=000000000000000
+forbiddenWordsError="You are not allowed to perform this kind of merge without a specific role"
+forbiddenWords="---,bad,dab"
+cleanupThreshold=0.90
 apiKey=""
 ```
 - This bot should be run on Python 3.10 and up.  Please install the requirements provided in requirements.txt, then start the bot by running the main script.
