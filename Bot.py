@@ -53,8 +53,8 @@ class KMergeBoxBot(discord.Client):
             return
 
         # If message is a command, then run a regen
-        splitCommand = message.content.lower().split(" ")
-        if len(splitCommand) == 2 and splitCommand[0] == "!regen":
+        splitCommand = message.content.split(" ")
+        if len(splitCommand) == 2 and splitCommand[0].lower() == "!regen":
             self.currentTasks[message.author.id] = splitCommand[1]
             print(f'Rerunning {splitCommand[1]} submitted from {message.author}')
             await message.channel.send(f'Rerunning {splitCommand[1]} submitted from {message.author}')
