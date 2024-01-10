@@ -47,14 +47,15 @@ class KMergeBoxBot(discord.Client):
         # If message sent from the bot, ignore
         if message.author.id == self.user.id:
             return
-        # If requester has already submitted a task, respond with an error
-        if message.author.id in self.currentTasks.keys() or message.author.id in self.currentLowPriorityTasks.keys():
-            await message.channel.send(f'{message.author.mention} has already submitted a pending task (please try and submit it again later): {self.currentTasks[message.author.id].filename}')
-            return
 
         # If message is a command, then run a regen
         splitCommand = message.content.split(" ")
         if len(splitCommand) == 2 and splitCommand[0].lower() == "!regen":
+            # If requester has already submitted a task, respond with an error
+            if message.author.id in self.currentTasks.keys() or message.author.id in self.currentLowPriorityTasks.keys():
+                await message.channel.send(
+                    f'{message.author.mention} has already submitted a pending task (please try and submit it again later): {self.currentTasks[message.author.id]}')
+                return
             self.currentTasks[message.author.id] = splitCommand[1]
             print(f'Rerunning {splitCommand[1]} submitted from {message.author}')
             await message.channel.send(f'Rerunning {splitCommand[1]} submitted from {message.author}')
@@ -62,6 +63,11 @@ class KMergeBoxBot(discord.Client):
 
         # If message do not have exactly one attachment, ignore
         if len(message.attachments) != 1:
+            return
+
+        # If requester has already submitted a task, respond with an error
+        if message.author.id in self.currentTasks.keys() or message.author.id in self.currentLowPriorityTasks.keys():
+            await message.channel.send(f'{message.author.mention} has already submitted a pending task (please try and submit it again later): {self.currentTasks[message.author.id]}')
             return
 
         attachment = message.attachments[0]
@@ -159,8 +165,12 @@ class KMergeBoxBot(discord.Client):
         file = discord.File(locToSaveTo)
         await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
         # Clear from the pending task queue
-        del self.currentTasks[firstTask[0]]
-        del self.currentLowPriorityTasks[firstTask[0]]
+        task = self.currentTasks.get(firstTask[0], None)
+        if task:
+            del self.currentTasks[firstTask[0]]
+        task = self.currentLowPriorityTasks.get(firstTask[0], None)
+        if task:
+            del self.currentLowPriorityTasks[firstTask[0]]
         self.currentlyMerging = False
         print(f'Ending merge: {nameWithoutExt}')
 
