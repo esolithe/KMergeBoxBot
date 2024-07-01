@@ -146,24 +146,29 @@ class KMergeBoxBot(discord.Client):
         # Get the name without the extension
         nameWithoutExt = attachment.replace('.yaml', '')
         print(f'Starting merge: {nameWithoutExt}')
-        # Declare the merge job command
-        commandToRun = f'sh ./run.sh {nameWithoutExt}'
-        # Start up the merge process, piping outputs ready to be collected once complete
-        process = await asyncio.create_subprocess_shell(commandToRun, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        # Wait for the merge to complete (no logs will be printed yet)
-        stdout, stderr = await process.communicate()
-        # Put the standard out and error into a single string
-        resultText = f'STDOUT: {stdout.decode()}, STDERR: {stderr.decode()}'
-        # Print to logs (console and file)
-        print(resultText)
-        locToSaveTo = path.join(basePath, 'log.txt')
-        with open(locToSaveTo, 'w') as fileToWrite:
-            fileToWrite.write(resultText)
         # Get the channel to respond to
         channel = self.get_channel(channelToListenOn)
-        # Respond with the logs as an attachment
-        file = discord.File(locToSaveTo)
-        await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
+        try:
+            # Declare the merge job command
+            commandToRun = f'sh ./run.sh {nameWithoutExt}'
+            # Start up the merge process, piping outputs ready to be collected once complete
+            process = await asyncio.create_subprocess_shell(commandToRun, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            # Wait for the merge to complete (no logs will be printed yet)
+            stdout, stderr = await process.communicate()
+            # Put the standard out and error into a single string
+            resultText = f'STDOUT: {stdout.decode()}, STDERR: {stderr.decode()}'
+            # Print to logs (console and file)
+            print(resultText)
+            locToSaveTo = path.join(basePath, 'log.txt')
+            with open(locToSaveTo, 'w') as fileToWrite:
+                fileToWrite.write(resultText)
+            # Respond with the logs as an attachment
+            file = discord.File(locToSaveTo)
+            await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished', file=file)
+        except Exception as e:
+            print(e)
+            await channel.send(f'<@{firstTask[0]}> - {nameWithoutExt} has finished. Log is unavailable as it cannot be uploaded but the merge may have succeeded. - {e}')
+
         # Clear from the pending task queue
         task = self.currentTasks.get(firstTask[0], None)
         if task:
